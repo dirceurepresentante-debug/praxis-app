@@ -19,6 +19,7 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(DEMO_MODE ? { nome: 'Demo', email: 'demo@praxis.app', role: 'admin' } : null)
   const [profissional, setProfissional] = useState(DEMO_MODE ? demoData.profissionais[0] : null)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
+  const [needsPayment, setNeedsPayment] = useState(false)
   const [data, setData] = useState(DEMO_MODE ? demoData : EMPTY_DATA)
   const [loading, setLoading] = useState(!DEMO_MODE)
 
@@ -32,7 +33,7 @@ export function AppProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       if (session?.user) handleSession(session)
-      else { setUser(null); setProfissional(null); setData(EMPTY_DATA); setLoading(false) }
+      else { setUser(null); setProfissional(null); setNeedsPayment(false); setData(EMPTY_DATA); setLoading(false) }
     })
 
     return () => subscription.unsubscribe()
@@ -48,7 +49,10 @@ export function AppProvider({ children }) {
     if (prof) {
       setProfissional(prof)
       setNeedsOnboarding(false)
-      await fetchAll()
+      const bloqueado = prof.status === 'pendente' || prof.status === 'inadimplente' || prof.status === 'cancelado'
+      setNeedsPayment(bloqueado)
+      if (!bloqueado) await fetchAll()
+      else setLoading(false)
     } else {
       setNeedsOnboarding(true)
       setLoading(false)
@@ -90,6 +94,17 @@ export function AppProvider({ children }) {
       { id: crypto.randomUUID(), nome: 'Retorno', cor: '#8ecbb3', profissional_id: profId, ativo: true },
     ])
     await fetchAll()
+  }
+
+  const iniciarCheckout = async () => {
+    if (DEMO_MODE || !supabase) return null
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    const prof = profissional || (await supabase.from('profissionais').select('*').eq('user_id', authUser.id).maybeSingle()).data
+    const { data, error } = await supabase.functions.invoke('criar-assinatura', {
+      body: { profissional_id: prof.id, nome: prof.nome, email: authUser.email }
+    })
+    if (error) throw error
+    return data?.checkout_url || null
   }
 
   const login = async (email, senha) => {
@@ -146,7 +161,7 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      user, profissional, needsOnboarding, completeOnboarding,
+      user, profissional, needsOnboarding, needsPayment, completeOnboarding, iniciarCheckout,
       login, logout, data, addItem, editItem, removeItem,
       loading, DEMO_MODE, pendentesCount
     }}>

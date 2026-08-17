@@ -3,10 +3,11 @@ import { useApp } from '../contexts/AppContext'
 import { Stethoscope } from 'lucide-react'
 
 export default function Onboarding() {
-  const { completeOnboarding } = useApp()
+  const { completeOnboarding, iniciarCheckout } = useApp()
   const [form, setForm] = useState({ nome: '', especialidade: '', registro: '', duracao_minutos: 50 })
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [etapa, setEtapa] = useState('perfil') // 'perfil' | 'checkout'
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
@@ -16,6 +17,10 @@ export default function Onboarding() {
     setSalvando(true)
     try {
       await completeOnboarding(form)
+      setEtapa('checkout')
+      // Redireciona para checkout do Pagar.me
+      const url = await iniciarCheckout()
+      if (url) window.location.href = url
     } catch (err) {
       setErro('Erro ao salvar perfil. Tente novamente.')
       setSalvando(false)
@@ -75,7 +80,7 @@ export default function Onboarding() {
             background: salvando ? '#7aaa95' : '#3a9175', color: '#fff',
             fontSize: 13, fontWeight: 600, cursor: salvando ? 'default' : 'pointer',
           }}>
-            {salvando ? 'Salvando…' : 'Entrar no sistema →'}
+            {etapa === 'checkout' ? 'Redirecionando para pagamento…' : salvando ? 'Salvando…' : 'Continuar para pagamento →'}
           </button>
         </form>
       </div>
